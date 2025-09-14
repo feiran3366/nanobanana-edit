@@ -14,6 +14,53 @@ function createJsonErrorResponse(message: string, statusCode = 500) {
 // --- 辅助函数：休眠/等待 ---
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+function buildEdgeoneHeaders(apiKey: string) {
+    return {
+        "X-Gooq-Api-Key": apiKey,          // 按截图文档字段
+        "X-OE-Gateway-Version": "2",
+        "X-OE-Key": "b167c5784f648bab49084aaaad141d0a", // 如为示例可替换为实际值；若不需要可移除
+        "X-OE-Gateway-Name": "gemini",
+        "X-OE-AI-Provider": "gemini",
+        "Content-Type": "application/json"
+    };
+}
+
+async function callEdgeone(messages: any[], apiKey: string): Promise<{ type: 'image' | 'text'; content: string }> {
+    if (!apiKey) { throw new Error("callEdgeone received an empty apiKey."); }
+    // 与 callOpenRouter 一致：仅使用 messages 作为主体主要字段；如需模型名可在 payload 中加入
+    const payload = { messages, stream: false };
+
+    console.log("Sending payload to EdgeOne:", JSON.stringify(payload, null, 2));
+
+    const apiResponse = await fetch("https://ai-gateway.eo-edgefunctions7.com", {
+        method: "POST",
+        headers: buildEdgeoneHeaders(apiKey),
+        body: JSON.stringify(payload)
+    });
+
+    if (!apiResponse.ok) {
+        const errorBody = await apiResponse.text();
+        throw new Error(`EdgeOne API error: ${apiResponse.status} ${apiResponse.statusText} - ${errorBody}`);
+    }
+
+    const responseData = await apiResponse.json();
+    console.log("EdgeOne Response:", JSON.stringify(responseData, null, 2));
+
+    // 对齐 callOpenRouter 的解析策略
+    const message = responseData?.choices?.[0]?.message ?? responseData?.message ?? responseData?.data?.message;
+
+    if (message?.images?.[0]?.image_url?.url) {
+        return { type: 'image', content: message.images[0].image_url.url };
+    }
+    if (typeof message?.content === 'string' && message.content.startsWith('data:image/')) {
+        return { type: 'image', content: message.content };
+    }
+    if (typeof message?.content === 'string' && message.content.trim() !== '') {
+        return { type: 'text', content: message.content };
+    }
+    return { type: 'text', content: "[模型没有返回有效内容]" };
+}
+
 // =======================================================
 // 模块 1: OpenRouter API 调用逻辑 (用于 nano banana)
 // =======================================================
@@ -61,7 +108,7 @@ async function callModelScope(model: string, apikey: string, parameters: any, ti
     const { task_id } = await generationResponse.json();
     if (!task_id) { throw new Error("ModelScope API did not return a task_id."); }
     console.log(`[ModelScope] Task submitted. Task ID: ${task_id}`);
-    
+
     // [修改] 动态计算最大轮询次数
     const pollingIntervalSeconds = 5;
     const maxRetries = Math.ceil(timeoutSeconds / pollingIntervalSeconds);
@@ -98,16 +145,16 @@ async function callModelScope(model: string, apikey: string, parameters: any, ti
 // =======================================================
 serve(async (req) => {
     const pathname = new URL(req.url).pathname;
-    
-    if (req.method === 'OPTIONS') { 
-        return new Response(null, { 
-            status: 204, 
-            headers: { 
-                "Access-Control-Allow-Origin": "*", 
-                "Access-Control-Allow-Methods": "POST, GET, OPTIONS", 
-                "Access-Control-Allow-Headers": "Content-Type, Authorization" 
-            } 
-        }); 
+
+    if (req.method === 'OPTIONS') {
+        return new Response(null, {
+            status: 204,
+            headers: {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization"
+            }
+        });
     }
 
     if (pathname === "/api/key-status") {
@@ -131,8 +178,8 @@ serve(async (req) => {
             const { model, apikey, prompt, images, parameters, timeout } = requestData;
 
             if (model === 'nanobanana') {
-                const openrouterApiKey = apikey || Deno.env.get("OPENROUTER_API_KEY");
-                if (!openrouterApiKey) { return createJsonErrorResponse("OpenRouter API key is not set.", 500); }
+                const geminiApiKey = apikey || Deno.env.get("GEMINI_API_KEY");
+                if (!geminiApiKey) { return createJsonErrorResponse("Gemini API key is not set.", 500); }
                 if (!prompt) { return createJsonErrorResponse("Prompt is required.", 400); }
                 const contentPayload: any[] = [{ type: "text", text: prompt }];
                 if (images && Array.isArray(images) && images.length > 0) {
@@ -140,7 +187,7 @@ serve(async (req) => {
                     contentPayload.push(...imageParts);
                 }
                 const webUiMessages = [{ role: "user", content: contentPayload }];
-                const result = await callOpenRouter(webUiMessages, openrouterApiKey);
+                const result = await callEdgeone(webUiMessages, geminiApiKey);
                 if (result.type === 'image') {
                     return new Response(JSON.stringify({ imageUrl: result.content }), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
                 } else {
@@ -150,10 +197,10 @@ serve(async (req) => {
                 const modelscopeApiKey = apikey || Deno.env.get("MODELSCOPE_API_KEY");
                 if (!modelscopeApiKey) { return createJsonErrorResponse("ModelScope API key is not set.", 401); }
                 if (!parameters?.prompt) { return createJsonErrorResponse("Positive prompt is required for ModelScope models.", 400); }
-                
+
                 // [修改] 将 timeout (或默认值) 传递给 callModelScope
                 // Qwen 默认2分钟，其他默认3分钟
-                const timeoutSeconds = timeout || (model.includes('Qwen') ? 120 : 180); 
+                const timeoutSeconds = timeout || (model.includes('Qwen') ? 120 : 180);
                 const result = await callModelScope(model, modelscopeApiKey, parameters, timeoutSeconds);
 
                 return new Response(JSON.stringify(result), {

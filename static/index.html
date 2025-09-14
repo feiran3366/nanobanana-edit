@@ -36,10 +36,10 @@
             <!-- ======================================================= -->
             <!-- [修改 1] nano banana 的控制面板 (生成按钮移入)          -->
             <!-- ======================================================= -->
-            <div id="nanobanana-controls" class="hidden">
+            <div id="nanobanana-controls" >
                 <div class="api-key-section">
-                    <h2>设置 <span class="prompt-remark">(请注意目前调用的是付费的Nano Banana模型)</span></h2>
-                    <input type="password" id="api-key-input-openrouter" placeholder="输入你的 OpenRouter API 密钥 (必填)">
+                    <h2>设置 <span class="prompt-remark"></span></h2>
+                    <input type="password" id="api-key-input-openrouter" placeholder="输入你的 Gemini API 密钥 (必填)">
                 </div>
                 <div class="upload-section">
                     <h2>1. 上传图片 (可选)</h2>
@@ -66,7 +66,7 @@
             <!-- ======================================================= -->
             <!-- [修改 1] ModelScope 模型的控制面板 (生成按钮移入)       -->
             <!-- ======================================================= -->
-            <div id="modelscope-controls">
+            <div id="modelscope-controls" class="hidden">
                 <div class="api-key-section">
                     <h2>设置</h2>
                     <input type="password" id="api-key-input-modelscope" placeholder="请填入 Modelscope 的 API Key">
