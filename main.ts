@@ -18,48 +18,38 @@ function buildEdgeoneHeaders(apiKey: string) {
     return {
         "X-Gooq-Api-Key": apiKey,          // 按截图文档字段
         "X-OE-Gateway-Version": "2",
-        "X-OE-Key": "b167c5784f648bab49084aaaad141d0a", // 如为示例可替换为实际值；若不需要可移除
+        "X-OE-Key": "b167c5f8764f46abb49084aaad141d0a", // 如为示例可替换为实际值；若不需要可移除
         "X-OE-Gateway-Name": "gemini",
         "X-OE-AI-Provider": "gemini",
         "Content-Type": "application/json"
     };
 }
 
+
+// =======================================================
+// 模块 1: OpenRouter API 调用逻辑 (用于 nano banana)
+// =======================================================
 async function callEdgeone(messages: any[], apiKey: string): Promise<{ type: 'image' | 'text'; content: string }> {
-    if (!apiKey) { throw new Error("callEdgeone received an empty apiKey."); }
-    // 与 callOpenRouter 一致：仅使用 messages 作为主体主要字段；如需模型名可在 payload 中加入
-    const payload = { messages, stream: false };
-
-    console.log("Sending payload to EdgeOne:", JSON.stringify(payload, null, 2));
-
-    const apiResponse = await fetch("https://ai-gateway.eo-edgefunctions7.com", {
-        method: "POST",
-        headers: buildEdgeoneHeaders(apiKey),
-        body: JSON.stringify(payload)
+    if (!apiKey) { throw new Error("callOpenRouter received an empty apiKey."); }
+    const openrouterPayload = { model: "gemini-2.5-flash-image-preview", messages };
+    console.log("Sending payload to Gemini:", JSON.stringify(openrouterPayload, null, 2));
+    const apiResponse = await fetch("https://ai-gateway.eo-edgefunctions7.com/v1/chat/completions", {
+        method: "POST", headers: { "Authorization": `Bearer ${apiKey}`, "OE-Key": "b167c5f8764f46abb49084aaad141d0a", "OE-Gateway-Name": "gemimi", "OE-AI-Provider": "openai", "Content-Type": "application/json" },
+        body: JSON.stringify(openrouterPayload)
     });
-
     if (!apiResponse.ok) {
         const errorBody = await apiResponse.text();
-        throw new Error(`EdgeOne API error: ${apiResponse.status} ${apiResponse.statusText} - ${errorBody}`);
+        throw new Error(`Gemini API error: ${apiResponse.status} ${apiResponse.statusText} - ${errorBody}`);
     }
-
     const responseData = await apiResponse.json();
-    console.log("EdgeOne Response:", JSON.stringify(responseData, null, 2));
-
-    // 对齐 callOpenRouter 的解析策略
-    const message = responseData?.choices?.[0]?.message ?? responseData?.message ?? responseData?.data?.message;
-
-    if (message?.images?.[0]?.image_url?.url) {
-        return { type: 'image', content: message.images[0].image_url.url };
-    }
-    if (typeof message?.content === 'string' && message.content.startsWith('data:image/')) {
-        return { type: 'image', content: message.content };
-    }
-    if (typeof message?.content === 'string' && message.content.trim() !== '') {
-        return { type: 'text', content: message.content };
-    }
+    console.log("Gemini Response:", JSON.stringify(responseData, null, 2));
+    const message = responseData.choices?.[0]?.message;
+    if (message?.images?.[0]?.image_url?.url) { return { type: 'image', content: message.images[0].image_url.url }; }
+    if (typeof message?.content === 'string' && message.content.startsWith('data:image/')) { return { type: 'image', content: message.content }; }
+    if (typeof message?.content === 'string' && message.content.trim() !== '') { return { type: 'text', content: message.content }; }
     return { type: 'text', content: "[模型没有返回有效内容]" };
 }
+
 
 // =======================================================
 // 模块 1: OpenRouter API 调用逻辑 (用于 nano banana)
