@@ -34,7 +34,7 @@ async function callEdgeone(messages: any[], apiKey: string): Promise<{ type: 'im
     const openrouterPayload = { model: "gemini-2.5-flash-image-preview", messages };
     console.log("Sending payload to Gemini:", JSON.stringify(openrouterPayload, null, 2));
     const apiResponse = await fetch("https://ai-gateway.eo-edgefunctions7.com/v1/chat/completions", {
-        method: "POST", headers: { "Authorization": `Bearer ${apiKey}`, "OE-Key": "b167c5f8764f46abb49084aaad141d0a", "OE-Gateway-Name": "gemimi", "OE-AI-Provider": "openai", "Content-Type": "application/json" },
+        method: "POST", headers: { "Authorization": `Bearer ${apiKey}`, "OE-Key": "b167c5f8764f46abb49084aaad141d0a", "OE-Gateway-Name": "gemimi", "OE-AI-Provider": "gemini", "Content-Type": "application/json" },
         body: JSON.stringify(openrouterPayload)
     });
     if (!apiResponse.ok) {
